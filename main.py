@@ -1,11 +1,11 @@
 # imports
 import sys
 import os
-
+import copy
 # constants
 DATA_PATH = './data'
 EXT_FILE = 'tak'
-OUT_FILE = 'dimacs'
+OUT_FILE = 'cnf'
 CHARS = ['0', '1', '_']
 
 # argument number
@@ -17,7 +17,7 @@ if argc != 1:
     sys.exit(1)
 
 
-# argv[0] = nom du fichier
+# argv[0] = nom du programme
 # argv[1] = argument 1 : nom du fichier
 
 def k_arrangement(n, k):
@@ -32,12 +32,24 @@ def k_arrangement(n, k):
                 yield y + [1]
 
 
+def dec2bin(d, nb=8):
+    """Représentation d'un nombre entier en chaine binaire (nb: nombre de bits du mot)"""
+    if d == 0:
+        return "0".zfill(nb)
+    if d < 0:
+        d += 1 << nb
+    b = ""
+    while d != 0:
+        d, r = divmod(d, 2)
+        b = "01"[r] + b
+    return b.zfill(nb)
+
 
 class ConvertisseurDIMACS:
 
     def __init__(self, file_path):
         self.size = 0
-        tab = []
+        self.tab = []
         # file not exists or is'nt a file
         if not os.path.exists(file_path) or not os.path.isfile(file_path):
             print("Erreur: le chemin doit amener vers un fichier existant", file_path)
@@ -55,9 +67,6 @@ class ConvertisseurDIMACS:
 
             # convert to integer
             self.size = int(self.size)
-
-            # create array
-            self.tab = []
             for i in range(self.size):
                 line = file.readline().replace('\n', '')
 
@@ -73,79 +82,119 @@ class ConvertisseurDIMACS:
 
                 # all's good
                 self.tab.append(line[:self.size])
+        self.list_possible = [dec2bin(i, self.size)
+                              for i in range((2**self.size))]  # Liste de toute les possibilitée pour pouvoir déterminé celle qui ne respècte pas les deux premières règles
 
-    def ecrireDIMACS(self, file_path):
-        with open(file_path,"w") as f:
+    def ecrireDIMACS(self, file_path: str) -> None:
+        with open(file_path, "w") as f:
+            compt_line: int = 1
+            f.write("p cnf {} {}\n".format(self.size**2, 0))
+            for i in range(len(self.tab)):
+                for j in range(len(self.tab)):
+                    if self.tab[i][j] == "0":
+                        f.write("-{}\n".format(self.index(j+1, i)))
+                        compt_line += 1
+                    elif self.tab[i][j] == "1":
+                        f.write("{}\n".format(self.index(j+1, i)))
+                        compt_line += 1
 
-            #Rule 1
-            self.eq_ligne(f)
-            self.eq_colonne(f)
+            list_exclue: list = []
+            for i in self.list_possible:
+                if not self.verif_ligne_col(i) or self.verif_suite(i):
+                    list_exclue.append(i)
+            tab_tmp: list = []
+            for i in range(0, self.size**2, self.size):
+                tab_tmp.append([j for j in range(i, i+self.size)])
+            tab_ligne: list = []
+            tab_colonne: list = []
+            for i in range(0, self.size):
+                tab_ligne.append([str(j)
+                                  for j in range(i*self.size, (i+1)*self.size)])
+                tab_colonne.append([str(j)
+                                    for j in range(i, self.size**2, self.size)])
+            for a in list_exclue:
+                for b in tab_ligne:
+                    for n in range(self.size):
+                        if a[n] == "1":
+                            f.write("-")
+                        f.write(str(int(b[n]) + 1) + " ")
+                    f.write("0\n")
+                    compt_line += 1
+                for b in tab_colonne:
+                    for n in range(self.size):
+                        if a[n] == "1":
+                            f.write("-")
+                        f.write(str(int(b[n]) + 1) + " ")
+                    f.write("0\n")
+                    compt_line += 1
 
-            #Rule 2
-            self.sim_ligne(f)
-            self.sim_colonne(f)
+            for a in self.list_possible:
+                for n in range(len(tab_ligne)):
+                    for m in range(n+1, len(tab_ligne)):
+                        for i in range(self.size):
+                            if a[j] == "0":
+                                f.write(
+                                    "-{} ".format(str(int(tab_ligne[n][i])+1)))
+                                f.write(
+                                    "-{} ".format(str(int(tab_ligne[m][i])+1)))
+                            else:
+                                f.write("{} ".format(
+                                    str(int(tab_ligne[n][i])+1)))
+                                f.write("{} ".format(
+                                    str(int(tab_ligne[m][i])+1)))
+                        f.write("0\n")
+                        compt_line += 1
 
-            #Rule 3
-            self.unique_ligne(f)
-            self.unique_colonne(f)
+                for n in range(len(tab_colonne)):
+                    for m in range(n+1, len(tab_colonne)):
+                        for i in range(self.size):
+                            if a[j] == "0":
+                                f.write(
+                                    "-{} ".format(str(int(tab_colonne[n][i])+1)))
+                                f.write(
+                                    "-{} ".format(str(int(tab_colonne[m][i])+1)))
+                            else:
+                                f.write("{} ".format(
+                                    str(int(tab_colonne[n][i])+1)))
+                                f.write("{} ".format(
+                                    str(int(tab_colonne[m][i])+1)))
+                        f.write("0\n")
+                        compt_line += 1
 
-    # RULES:
-    # 1 - need to have equal number of 0 and 1 on all rows / columns
-    # 2 - no more than 2 same numbers in a raw
-    # 3 - each row / column has to be unique   
+    def verif_ligne_col(self, tab: str):
+        Z_count: int = 0
+        O_count: int = 0
+        for i in tab:
+            if i == '0':
+                Z_count += 1
+            else:
+                O_count += 1
+        return Z_count == O_count
 
+    def verif_suite(self, tab: str):
+        for i in range(len(tab)-2):
+            if tab[i] == tab[i+1] and tab[i+1] == tab[i+2]:
+                return True
+        return False
 
-    # doute de timon (on a fait des ou de et il faut faire de et de ou)
-    def eq_ligne(self, f):
-        for arrangement in k_arrangement(self.size, self.size//2) :
-            for j in range(self.size):
-                index = [i + j*self.size for i in range(self.size)]
-                text = ""
-                for n in range(self.size):
-                    text += ('-' if arrangement[n] == 0 else '') + str(index[n]) + ' '
-                f.write(text)
-                f.write("\n")
+    # ---- 1D ARRAY FORMAT ------
+    #
+    # retourne une ligne du tableau 2D grâce à un index sur un tableau 1D
 
+    def row(self, i: int) -> list:
+        return [self.tab[k] for k in range(i*self.size, i*self.size + self.size)]
 
-    def eq_colonne(self, f):
-        for arrangement in k_arrangement(self.size, self.size//2) :
-            for i in range(self.size):
-                index = [i + j*self.size for j in range(self.size)]
-                text = ""
-                for n in range(self.size):
-                    text += ('-' if arrangement[n] == 0 else '') + str(index[n]) + ' '
-                f.write(text)
-                f.write("\n")
+    # retourne une colonne du tableau 2D grâce à un index sur un tableau 1D
+    def col(self, i: int) -> list:
+        return [self.tab[k*self.size + i] for k in range(self.size)]
 
-            
-
-    def sim_ligne(self, f):
-        for i in range(1, self.size - 1):
-            for j in range(0, self.size):
-                index = [(i-1) + j * self.size, i + j * self.size, (i+1) + j * self.size]
-                f.write(str(index[0]) + " " + str(index[1]) + " " + str(index[2]))
-                f.write(" -" + str(index[0]) + " -" + str(index[1]) + " -" + str(index[2]))
-            f.write("\n")
-
-
-    def sim_colonne(self, f):
-        for i in range(0, self.size):
-            for j in range(1, self.size - 1):
-                index = [i + (j-1) * self.size, i + j * self.size, i + (j+1) * self.size]
-                f.write(str(index[0]) + " " + str(index[1]) + " " + str(index[2]))
-                f.write(" -" + str(index[0]) + " -" + str(index[1]) + " -" + str(index[2]))
-            f.write("\n")
-
-    def unique_ligne(self, f):
-        pass
-
-    def unique_colonne(self, f):
-        pass
-
+    # retourne l'index 1D d'un élément depuis un index 2D
+    def index(self, i: int, j: int) -> int:
+        return i + j * self.size
+    #
+    # -----------------------------
 
 
 # execute
-
 c = ConvertisseurDIMACS("{}/{}.{}".format(DATA_PATH, sys.argv[1], EXT_FILE))
-
 c.ecrireDIMACS("{}/{}.{}".format(DATA_PATH, sys.argv[1], OUT_FILE))

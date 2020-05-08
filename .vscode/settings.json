@@ -1,9 +1,3 @@
 {
-    "python.pythonPath": "C:\\Users\\doria\\AppData\\Local\\Programs\\Python\\Python38-32\\python.exe",
-    "extensions.ignoreRecommendations": true,
-    "files.autoSave": "off"
-    "extensions.ignoreRecommendations": true,
-    "files.autoSave": "off"
-    "extensions.ignoreRecommendations": true,
-    "files.autoSave": "off"
+    "python.pythonPath": "/usr/bin/python3"
 }

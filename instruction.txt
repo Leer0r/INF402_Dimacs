@@ -1,4 +1,0 @@
-FICHIER 1.tak --> class ConvertisseurDIMACS --> Lire le fichier
-                                            --> lecture des lignes et des colones 
-                                            --> garde en mémoire les valeurs des lignes et des colones (_ pour indéfini, 0 pour valeur 0 et 1 pour valeur 1)
-                                            --> va écrire un fichier .dimacs en interprétant les valeurs
